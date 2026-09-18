@@ -452,11 +452,84 @@ Pions 平台(内网/边缘)                      研发                      办
 | DeepSeek provider | `deepseek.json` 停留在 deepseek-chat/reasoner @128k、OpenAI 兼容 | 更新目录（deepseek-flash / v4-pro @1M）、Messages 协议、effort、Files 传图、reasoning passback | 高（若主力 DeepSeek） |
 | 子代理后端 | `delegate` 已支持 `provider` 参数 | 直接用 `claude-acp` / `codex-acp` / 未来 `dsh-acp` 作子代理 provider——无需新做 | 已具备 |
 
-**路径 3（战略）：训练侧对齐**
+**路径 3（战略）：训练侧对齐**（为什么、怎么做、数据从哪来：见 5.4）
 
 goose 作为开源 harness 的最大机会不是再造工具，而是成为开源模型的"训练 harness"：与模型方（DeepSeek / Qwen / Kimi / GLM）共建 RL 环境，让模型在 goose 的工具分布上后训练。短期可行动：用 recipes + `goose-self-test.yaml` + `evals/open-model-gym` 搭 Terminal-Bench 类评测流水线，量化路径 2 中"工具画像"改动的收益；这也是 Pions 评估任何 harness 改动的唯一可靠尺子。
 
 **结论**：goose 的 harness 短板**可以补，但分两层**——工具面 / 上下文 / 沙箱这一层靠移植 dsh 设计 1–2 个季度可补齐并有望反超（goose 有网络出口代理、多 provider、记忆、TUI）；"模型共训练"这一层 goose 自身代码消除不了，只能通过路径 1 借力或路径 2 的工具画像对齐来逼近。对 Pions：主力模型是 DeepSeek → goose + dsh-acp（或直接 dsh SDK）；主力是 Claude → goose + claude-acp；两条路都要在 dsh/Claude 侧处理数据出境。
+
+### 5.4 训练侧对齐：为什么要训练、怎么训、数据从哪来
+
+#### 5.4.1 为什么要训练（以及什么时候不必训练）
+
+**机制**：模型的工具使用不是"读懂 JSON schema"的通用能力，而是后训练（SFT + RL）学出来的策略 π(action | 系统提示, 工具目录, 观测历史)。harness 定义了这个策略的**动作空间**（工具名、参数格式、能否并行、何时结束）和**观测空间**（`cat -n` 的行号格式、`str_replace` 的报错措辞、截断/spill 的形状、压缩摘要的样子）。换 harness 就是换环境分布：权重一字未动，但模型处在分布外——表现为参数格式错、并行调用少、错误恢复差、重复调用、过早放弃。这些正是"同模型、不同 harness、成绩差 5–20 分"的来源，也是 SWE-bench / Terminal-Bench 排行榜都按 **agent × model 组合**列名的原因。
+
+**三条证据**：
+
+| 证据 | 说明 |
+|---|---|
+| 同模型换 harness 掉分 | DeepSeek V4 Flash 在 dsh 极简 / Claude Code / Codex / OpenCode 上 DeepSWE 得分 72.6 / 69.8 / 65.6 / 65.5（findharness，第三方）；Anthropic 报告 SWE-bench 时也强调自家最小 scaffold，并注明 scaffold 影响结果 |
+| 同 harness 换训练涨分 | DeepSeek V4 Flash 4 月预览 → 0731，同一个 dsh 极简模式，Terminal-Bench 61.8 → 82.7（第三方转述）：harness 没变，是模型对齐了 harness |
+| 厂商都在这么做 | Anthropic：Claude Code 与 Claude 共同开发，2025-09-28 起消费者计划（含 Claude Code）会话默认用于训练、可退出；OpenAI：codex-1 / GPT-5-Codex 在 Codex harness 的真实任务上做 RL；Kimi K2：大规模 agentic 数据合成 + 联合 RL；Qwen3-Coder：2 万并行环境的长程 agentic RL；GLM-4.5：slime RL 基础设施；DeepSeek：`dsh_session_log` 默认上传会话日志——**harness 就是数据采集器** |
+
+**训练解决不了什么**：训练不会凭空长出 harness 没有的工具；它只对齐**一个**工具分布，工具 schema 一改就要重训（这也是 dsh 坚持"工具目录跨模式稳定"的另一层原因）。所以工具画像（路径 2）永远是零成本的第一步，训练是最后一步。
+
+**决策阶梯（何时不必训练）**
+
+| 层级 | 做法 | 成本 | 适用 |
+|---|---|---|---|
+| L0 匹配分布 | 工具名 / 描述 / 观测格式照抄目标模型共训练的 harness（DeepSeek → dsh，Claude → Claude Code） | 天 | 所有情况的第一步 |
+| L1 借力 | 把共训练 harness 作为 goose 的 ACP provider（`claude-acp` / `dsh-acp`） | 周 | 主力模型是闭源或有官方 harness |
+| L2 SFT / 蒸馏 | 成功轨迹 LoRA 微调开源模型到 goose 工具画像 + 领域任务 | 周–月 | 自托管 / 私有化，L0/L1 不够 |
+| L3 RL | 在带验证器的环境里做策略优化 | 季度 | 需要厂商没训练过的领域行为 |
+
+对 Pions，真正的训练理由不是通用 harness（交给厂商 + L0/L1），而是 **L3 的领域行为**：钻井仿真器配置与调参、井身结构 / 钻具组合约束、测井与日报解析、异常工况诊断——没有厂商会为这些做后训练，而 Pions 手里恰好有可验证奖励的来源（见 5.4.3 第 5 条）。
+
+#### 5.4.2 怎么做训练
+
+对 agentic 训练，"数据集"不是一堆文本，而是 **(任务, 环境, 验证器)** 三元组；轨迹是在线 rollout 出来的。流水线五步：
+
+| 步骤 | 内容 | goose 里已有的零件 | 差什么 |
+|---|---|---|---|
+| 1. 环境套件 | 数百–数千个带验证器的任务；验证器 = 单测 / 命令退出码 / 文件断言 / 仿真器一致性 | `evals/open-model-gym`：models × runners × scenarios 矩阵，scenario YAML = `setup` 文件 + 多轮 `prompt` + `validate`（`file_contains` / `file_matches` / `file_not_matches` / `file_exists` / `command_succeeds` / `tool_called` / `str`），3 次取最差；recipes 的 `retry.checks`（shell 成功校验）也可当验证器 | 目前只有 4 个场景；缺容器化隔离与并行调度 |
+| 2. 轨迹采集 | 教师模型（开源强模型 / `dsh-acp`）在 goose 工具画像上跑 → 验证器过滤 → 成功轨迹；或目标模型自采样 + 拒绝采样（expert iteration） | 会话即轨迹：`sessions.db` 的 `messages` 表、`goose session export`、13 个 hook 事件旁路记录工具调用 / 结果 | 缺"训练格式"导出（含工具 schema、系统提示、奖励标签） |
+| 3. SFT / 蒸馏（LoRA） | 成功轨迹（连同错误恢复片段）监督微调；混入通用数据防遗忘 | — | 公开锚点：SWE-Gym 2.4k 真实任务 → Qwen2.5-Coder-32B 32.0% SWE-bench Verified；SWE-smith 5 万合成任务 → SWE-agent-LM-32B 40.2% |
+| 4. RL（RLVR / agentic RL） | 目标模型在环境中 rollout，验证器给 0/1 或分档奖励，GRPO / DAPO 类算法更新；瓶颈是**环境吞吐**（每条 rollout 数分钟沙箱），不是 GPU | — | 公开锚点：DeepSWE（Qwen3-32B，R2E-Gym 4.5k 任务，64×H100 × 6 天，纯 RL 42.2% → TTS 59%）；框架 veRL / slime / SkyRL / prime-rl / AReaL |
+| 5. 评测与部署 | held-out 任务 + 通用能力回归；部署为 goose provider（vLLM / SGLang / llama.cpp），**工具画像与训练时逐字一致** | 60+ provider、本地推理、toolshim | 工具画像功能本身（路径 2） |
+
+**算力与途径（小团队视角）**
+
+| 途径 | 能做什么 | 量级 |
+|---|---|---|
+| 自建 1 节点 8×H100 | 30B-A3B 级（Qwen3-Coder-30B-A3B、gpt-oss-20b）LoRA SFT；百级并行环境的小规模 GRPO | SFT 天级、千美元级；RL 周级、万美元级 |
+| 托管训练 API | Thinking Machines Tinker（开源权重 LoRA，`forward_backward` / `sample` 原语可跑 RL）；OpenAI RFT（仅其模型，grader 定义奖励）；Predibase / Together / Fireworks 微调 | 免运维，按 token 计费 |
+| 复现 DeepSWE 规模 | 64×H100 × 1 周 | 数万美元 |
+| 不要碰 | 600B+ MoE 全参 RL | 厂商的事 |
+
+候选开源底座（许可宽松）：Qwen3-Coder-30B-A3B（Apache-2.0）、GLM-4.5-Air（MIT）、gpt-oss-120b / 20b（Apache-2.0）、MiniMax-M2、DeepSeek 开源权重（MIT）。
+
+**要踩的坑**：奖励作弊（LLM 评判会被钻空子，优先用可执行验证器）；灾难性遗忘（混通用数据、LoRA 而非全参）；过拟合 harness 版本（工具 schema 冻结 + 版本化，改 schema 即回归评测）；仿真到实钻的 sim-to-real 差距（奖励里加实测井偏差项）；数据治理（会话含代码与井数据，训练前脱敏）。
+
+#### 5.4.3 数据从哪里来
+
+| 来源 | 例子 | 给什么 | 注意 |
+|---|---|---|---|
+| 1. 公开环境套件（真实仓库 + 测试） | SWE-Gym（2.4k）、SWE-smith（5 万+ 合成 bug）、R2E-Gym（8k+）、SWE-rebench（持续更新）、Multi-SWE-bench / Multi-SWE-RL（多语言）、Terminal-Bench 2.0 / Harbor 任务 | 通用编码与终端能力的任务 + 验证器 | 大多 Python 为主；可直接接到 open-model-gym 的 scenario 格式 |
+| 2. 工具调用合成数据 | APIGen-MT（模拟人–agent 多轮）、ToolACE、Toucan（从约 500 个真实 MCP 服务器合成 150 万条）、Kimi K2 的"模拟工具 + 模拟用户 + rubric 评判"管线 | 工具调用格式、多轮、MCP 工具分布 | 合成数据的验证器弱，只适合 SFT 不适合 RL 主奖励 |
+| 3. 自家 harness 遥测 | goose 会话（`sessions.db`、hooks）+ 结果标注（验证器 / 用户反馈 / 是否被回滚） | 真实任务分布、真实错误恢复 | 这正是 dsh 默认上传会话日志、Claude Code 消费者数据默认训练的原因；Pions 内部会话可合规使用，对外产品须明示并可退出 |
+| 4. 教师蒸馏 | 强模型在目标工具画像上跑 → 验证器过滤 → SFT | 高质量轨迹最快的来源 | Anthropic / OpenAI 条款禁止用输出训练竞争模型；教师用 DeepSeek（MIT）、Qwen（Apache-2.0）、GLM（MIT）、Kimi K2（modified MIT） |
+| 5. **领域数据（Pions 护城河）** | 物理仿真器（扭矩摩阻、水力、ROP、井眼轨迹）= **可验证奖励生成器**：任务 = 给定井况让 agent 配置 / 运行 / 解释仿真，奖励 = 物理一致性 + 约束满足 + 与历史井实测的偏差；历史井（日报、测井、BHA）→ 真实任务；参数扫描 → 无限合成井况 | 厂商永远不会训的那层 | 先冻结"仿真器工具"的 schema，再采集；奖励要有实测项防止只学会讨好仿真器 |
+| 6. 人类示范与偏好 | 工程师用 goose 的真实会话、对结果的采纳 / 修改 | 偏好数据（DPO）、rubric 校准 | 量小但决定"像不像我们的工程师" |
+
+**分阶段建议（Pions）**
+
+| 阶段 | 做什么 | 训练量 |
+|---|---|---|
+| Q0（现在） | 实现工具画像（L0）与 `dsh-acp`（L1）；把 `open-model-gym` 扩到 100+ 研发 / 钻井场景并容器化；用它量化 L0/L1 收益 | 0 |
+| Q1 | 用开源教师 + 拒绝采样在 goose 工具画像上采 5k–20k 条成功轨迹；LoRA SFT 一个 30B 级底座；部署为 goose provider | SFT |
+| Q2+ | 只对领域 agent 做仿真器奖励的 GRPO；通用 harness 对齐继续交给厂商 + L0/L1 | RL |
+
+**goose 自身的战略含义**：dsh 极简模式（单个持久 bash 工具）不是 UX 选择而是训练选择——最小动作空间最便宜地扩环境、最容易泛化到标准模式。goose 若发布一个**冻结的最小工具画像 + 开放环境套件**（open-model-gym 的方向），让 Qwen / GLM / Kimi / MiniMax 等在其上做后训练，就能成为中立（AAIF / Linux Foundation）的"开源模型训练 harness"——这是路径 3 的完整含义。
 
 ---
 
@@ -556,5 +629,7 @@ goose 作为开源 harness 的最大机会不是再造工具，而是成为开�
 - Simon Willison：First impressions of Claude Cowork（2026-01）
 
 **goose**：本仓库源码；github.com/aaif-goose/goose v1.37.0 发布说明；aaif.io/projects/goose；goose-docs.ai。
+
+**训练侧（5.4 引用的论文与发布）**：SWE-Gym（Pan et al., 2024）；SWE-smith（Yang et al., 2025）；R2E-Gym（Jain et al., 2025）；DeepSWE（Agentica × Together, 2025）；SWE-rebench（Nebius）；Multi-SWE-bench / Multi-SWE-RL（ByteDance）；Terminal-Bench 2.0 / Harbor；APIGen-MT、Toucan（Salesforce 等）；ToolACE；Kimi K2 技术报告（agentic 数据合成与联合 RL）；Qwen3-Coder 发布说明（2 万并行环境 agentic RL）；GLM-4.5 / slime；OpenAI codex-1 与 GPT-5-Codex 发布说明；Anthropic 消费者条款更新（2025-08-28 公告，09-28 生效）；Thinking Machines Tinker；OpenAI Reinforcement Fine-Tuning；veRL / SkyRL / prime-rl / AReaL。数字均取自各自论文或发布，未在本会话复现。
 
 **第三方对比（谨慎引用）**：lowcode.agency、morphllm、theaiagentindex 的 goose vs Claude Code 文章（SWE-bench 数字非严格同条件）；softr.io / DataCamp / hatchworks 的 Cowork vs Claude Code 文章；gradually.ai / releasebot 的 Claude Code changelog 汇总。
