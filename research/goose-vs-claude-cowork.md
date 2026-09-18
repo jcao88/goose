@@ -1,28 +1,29 @@
-# goose vs Claude Cowork vs Claude Code：通用 Agent 能力全景对比（同模型假设）
+# goose vs Claude Cowork vs Claude Code vs DeepSeek Harness：通用 Agent 能力全景对比（同模型假设）
 
 > 调研日期：2026-09-18
 > goose 依据：本仓库源码 v1.37.0（commit `0ab4b84`），文中文件路径均可在仓库中核对
-> Claude Code 依据：code.claude.com 官方文档（本会话可直接抓取；覆盖 tools-reference、permission-modes、sandboxing、mcp、hooks、sub-agents、agent-teams、workflows、routines、claude-code-on-the-web、memory、context-window、costs、agent-sdk、feature-availability、changelog 等页面），版本参考 v2.1.275（2026-09-17）
+> Claude Code 依据：code.claude.com 官方文档（本会话可直接抓取），版本参考 v2.1.275（2026-09-17）
 > Cowork 依据：Anthropic 公开资料与媒体/安全研究报道（本会话网络代理禁止直接抓取 anthropic.com / support.claude.com，因此来自搜索摘要，关键结论已多源交叉）
-> 重要时间点：**2026-09-16 Anthropic 宣布把 Cowork 并入统一的 Claude 体验**并推出 Claude Docs / Slides / Design。下文的 "Cowork" 指这套能力集合，而非一个独立产品名。
+> DeepSeek Harness 依据：`deepseek-ai/deepseek-harness` 源码克隆（v0.1.6-alpha.2，commit `ddefc45`，2026-09-17），含 `docs/`、`packages/*/README.md`、生成的工具目录与配置目录；官方文档站与媒体报道被代理拦截，基准数字来自第三方转述并如此标注
+> 重要时间点：**2026-09-16 Anthropic 宣布把 Cowork 并入统一的 Claude 体验**并推出 Claude Docs / Slides / Design；**2026-08-13 DeepSeek 开源 DeepSeek Harness（`dsh`，MIT，开发者预览）**。
 
 ---
 
 ## 0. 3000 英尺结论（TL;DR）
 
-假设三者背后是**同一个模型**，剩下的差异只来自：**harness（提示词、工具设计、上下文/记忆策略）**、**执行环境（本机 / VM / 云）**、**生态与治理（接入、权限、企业控制）**。
+假设四者背后是**同一个模型**，剩下的差异只来自：**harness（提示词、工具设计、上下文/记忆策略）**、**执行环境（本机 / VM / 云）**、**生态与治理（接入、权限、企业控制）**。
 
 | 结论 | 说明 |
 |---|---|
-| **三者的关系** | Claude Code 与 Cowork 共用同一个 agentic 引擎（Anthropic 官方说法），Claude Code 是面向开发者的"全控制面"，Cowork 是面向知识工作者的"零配置面"。goose 是二者的开源替代品：正面对标 Claude Code（CLI / 桌面 / API / IDE），部分覆盖 Cowork（桌面、computercontroller、docx/xlsx/pdf 工具）。 |
-| **harness 质量：Claude Code > Cowork ≥ goose** | Claude Code 有约 35 个内置工具（独立 `Read`/`Glob`/`Grep`、`Monitor`、`WebFetch` 隔离上下文、后台 Bash、检查点回滚）、plan mode、effort 分档、auto mode 分类器、1M 上下文与微压缩；goose 的 developer 扩展只有 5 个工具（write/edit/shell/tree/read_image），读文件靠 `cat/sed`。第三方博客引用的 SWE-bench 差距（Claude Code 72.7% vs goose ~45%，同 Sonnet）虽非严格 A/B，方向一致。 |
-| **goose 的不可替代性** | 60+ provider + 本地 llama.cpp；全规格 MCP 宿主（含 sampling）；可作为 HTTP/ACP/SDK 服务被嵌入；Apache-2.0；可自定义发行版；完全可审计。Claude Code 的 Agent SDK 只允许 API key 鉴权、受商业条款约束、不得以 Claude Code 品牌出现；Cowork 完全没有 API。 |
-| **Computer use / 浏览器：Cowork ≈ Claude Code > goose** | Cowork/Claude Desktop：内置浏览器、Claude in Chrome、按应用授权的 computer use（Pro/Max，mac+win，mac 可后台）。Claude Code CLI：`--chrome`、`computer-use` MCP（仅 macOS 研究预览）。goose：仅 macOS 靠 Peekaboo 像样，无内置浏览器。 |
-| **文件与文档** | 代码/本地文件：Claude Code ≥ goose > Cowork（Cowork 受授权文件夹约束）。Office 文档：Cowork（Docs/Slides 编辑器 + Office 加载项 + 文档 Skills）> Claude Code（Skills + Artifacts）> goose（内置 docx/xlsx/pdf 工具）。 |
-| **记忆** | Claude Code：CLAUDE.md 层级 + 自动记忆（MEMORY.md 索引 + 主题文件，默认开启，机器本地不同步）+ 子代理记忆。Cowork：账号级统一记忆（仅云端会话）。goose：显式 memory 扩展 + 历史会话全文检索 + `.goosehints/AGENTS.md` + 每轮注入的 MOIM。 |
-| **效率 / 成本** | Claude Code 的成本工程最深（prompt cache 统计、按 skill/子代理/MCP 归因、OTel、effort/fast mode、子代理换小模型、MCP 工具定义延迟加载）；goose 次之且完全透明（按会话累计 token/费用、Code Mode）；三者中只有 goose 能通过换模型把单价降下来。订阅制下 Claude Code 与 Cowork 共享 5 小时 + 每周限额。 |
-| **安全** | Claude Code：seatbelt/bubblewrap 沙箱（mac/linux/WSL2，原生 Windows 不支持）+ 域名白名单代理 + auto mode 分类器 + 托管策略；Cowork：本地 Linux VM 或云端 VM（2026-07 SharedRoot 逃逸后云执行成默认）；goose：进程内检查器链 + 仅 macOS 的 seatbelt 沙箱。 |
-| **对 Pions 的含义** | 编码/研发：Claude Code。嵌入产品 / 私有化 / 换模型：goose（或 Claude Agent SDK，若锁定 Claude）。非技术同事的文档工作：Cowork（现在的 Claude）。三者共用 **MCP server + SKILL.md + `.claude/agents` + AGENTS.md**，这是最值得投资的公共层。 |
+| **四者的关系** | Claude Code 与 Cowork 共用同一个 agentic 引擎（Anthropic 官方说法），Claude Code 是面向开发者的"全控制面"，Cowork 是面向知识工作者的"零配置面"。goose 是二者的开源替代品：正面对标 Claude Code（CLI / 桌面 / API / IDE），部分覆盖 Cowork。DeepSeek Harness（dsh）是 DeepSeek 为自家模型共训练出来的开源 harness，"一切皆插件"，定位是可组装的 agent 运行时而非最终用户产品。 |
+| **harness 质量：Claude Code ≈ dsh（各自模型上）> Cowork ≥ goose** | Claude Code 有约 35 个内置工具、plan mode、effort 分档、auto mode 分类器、1M 上下文与微压缩；dsh 有 read/write/edit/glob/grep（内置 ripgrep）/持久 PTY/后台 jobs/LSP/spill/token meter/PTC，且 DeepSeek V4 的公开基准就是在 dsh"极简模式"上跑的；goose 的 developer 扩展只有 5 个工具，读文件靠 `cat/sed`。 |
+| **goose 的短板能不能靠 dsh 补？能，但分两层** | **工具面 / 上下文 / 沙箱**这一层可以移植（MIT→Apache 兼容，1–2 个季度），goose 还能凭出口代理与多 provider 反超；**模型共训练**这一层只能"借力"：把 dsh 当 goose 的 ACP provider（照 `claude_acp.rs` 模式，1–2 周），或按模型族对齐工具画像（DeepSeek 用 dsh 的工具 schema，Claude 用 Claude Code 的）。细节见第 5 节。 |
+| **goose 的不可替代性** | 60+ provider + 本地 llama.cpp；全规格 MCP 宿主（含 sampling）；可作为 HTTP/ACP/SDK 服务被嵌入；Apache-2.0；可自定义发行版；完全可审计。Claude Code 的 Agent SDK 只允许 API key、受商业条款约束；Cowork 没有 API；dsh 可嵌入但仍是预览期、Node 生态、DeepSeek 优先。 |
+| **Computer use / 浏览器：Cowork ≈ Claude Code > dsh > goose** | Cowork/Claude Desktop 内置浏览器、Claude in Chrome、按应用授权的 computer use；Claude Code CLI `--chrome` + `computer-use` MCP（仅 macOS 预览）；dsh 走实验性 provider（Playwright MCP / Chrome DevTools MCP / Stagehand；Cua Driver computer use）；goose 仅 macOS 靠 Peekaboo 像样，无内置浏览器。 |
+| **记忆** | Claude Code：CLAUDE.md 层级 + 自动记忆（机器本地）+ 子代理记忆；Cowork：账号级统一记忆（仅云端会话）；goose：显式 memory 扩展 + 历史会话全文检索 + `.goosehints/AGENTS.md` + MOIM；dsh：**无内置记忆**，只有 AGENTS.md 加载 + MCP 记忆服务器 overlay + 会话全文检索。 |
+| **效率 / 成本** | Claude Code 成本工程最深（缓存统计、归因、OTel）；dsh 的 KV-cache 纪律最严（append-only 日志、系统提示作为历史节点、`in-history` 更新、工具目录跨模式稳定）且 DeepSeek 单价低；goose 透明可控且唯一能换本地模型；Cowork 受订阅限额约束。 |
+| **安全 / 数据出境** | Claude Code：seatbelt/bubblewrap 沙箱 + 域名白名单代理 + 分类器 + 托管策略；Cowork：VM/云隔离（7 月有逃逸先例）；goose：检查器链 + 仅 macOS 沙箱 + 出口代理；dsh：**跨平台文件沙箱（含 Windows restricted token）但不管网络**，SAFETY.md 自述"未经安全审计"，且**默认把会话日志增量随每次请求上传到 DeepSeek 端点**（`dsh_session_log`，可关）。 |
+| **对 Pions 的含义** | 编码/研发：Claude Code。嵌入产品 / 私有化 / 换模型：goose；若主力模型是 DeepSeek，用 goose + `dsh` ACP provider（或直接 dsh SDK），并**关闭 dsh 的会话日志上传**。非技术同事的文档工作：Cowork（现在的 Claude）。四者共用 **MCP server + SKILL.md + AGENTS.md** 这一公共层。 |
 
 ---
 
@@ -104,13 +105,39 @@
 └───────────────────────────────────────────┘
 ```
 
-模型：三者中 Claude Code / Cowork 仅 Claude（Sonnet 5 默认、Opus 5、Fable 5.1 单独计费）；企业可指向 Bedrock / Vertex / Foundry 等兼容端点。
+### 1.4 DeepSeek Harness（`dsh`；DeepSeek AI，MIT，2026-08-13 开发者预览）
+
+```
+┌──────────────── 交互面 ────────────────┐
+│ Web UI(127.0.0.1:3080) · Electron Desktop │
+│  (mac arm64/x64, win x64；Linux 非发布目标) │
+│ headless 一次性 CLI · TS/Python SDK(JSON-RPC) │
+│ ACP server(automation-only) · 无 TUI    │
+└────────────────┬───────────────────────┘
+                 │ profile = bundle 分层 + cordis.patch.yml 覆盖
+┌────────────────▼───────────────────────┐
+│ Cordis 内核（"时空可组合性"元框架，源自 Koishi）│
+│  一切皆插件：模型适配器、工具注册表、        │
+│  会话日志、agent loop 本身都可替换          │
+│ 291 个 @deepseek-ai/dsh-* 包            │
+│ Agent presets(工作模式)：标准 / PTC / 极简 / 创造 │
+│ append-only 会话日志 = 模型上下文唯一真源  │
+│ 沙箱：Linux bwrap→Landlock / macOS Seatbelt / │
+│  Windows ACL restricted token（仅文件效应）│
+│ 子代理：in-process spawn/fork · ACP ·     │
+│  Codex(app-server) · Claude Code(Agent SDK) │
+└────────────────┬───────────────────────┘
+                 │ deepseek-official(Messages/Chat, 1M ctx)
+                 │ + pi-ai 目录(anthropic/openai/moonshot/zai/自定义网关)
+```
+
+模型：Claude Code / Cowork 仅 Claude；dsh 以 DeepSeek 为一等公民并可接 pi-ai 目录与自定义 OpenAI/Anthropic 协议网关，无本地推理；goose 60+ provider 含本地推理。
 
 ---
 
-## 2. 逐维度深度对比
+## 2. 逐维度深度对比（goose / Claude Code / Cowork）
 
-每个维度：**goose 实现（含源码位置）→ Claude Code 实现（官方文档）→ Cowork 实现 → 判断**。评分 1–5，是"同模型"前提下对 harness / 环境 / 生态的评估。
+每个维度：**goose 实现（含源码位置）→ Claude Code 实现（官方文档）→ Cowork 实现 → 判断**。评分 1–5，是"同模型"前提下对 harness / 环境 / 生态的评估。dsh 的逐维度事实集中在第 5 节，四方评分见第 3 节。
 
 ### 2.1 Agent 循环、规划与推理 harness
 
@@ -264,7 +291,7 @@
 
 ### 2.12 模型与供应商
 
-**goose**：`providers/init.rs` 注册 ~35 个代码 provider + 29 个声明式 JSON provider（Anthropic、OpenAI、Google/Vertex、Azure、Bedrock、SageMaker、Databricks、Ollama、OpenRouter、LiteLLM、HuggingFace、Snowflake、xAI、DeepSeek、Groq、Mistral、Cerebras、NVIDIA、Zhipu/Z.ai、MiniMax、Moonshot、Alibaba、Perplexity、LM Studio…）；**本地推理**（llama.cpp，CUDA/Vulkan）；`toolshim` 给无原生工具调用的小模型；**ACP providers**（`claude_acp` / `codex_acp` / `copilot_acp` / `amp_acp` / `pi_acp`）把整个 Claude Code / Codex harness 当模型用并复用订阅；主 / fast / planner / editor 多模型分工。
+**goose**：`providers/init.rs` 注册 ~35 个代码 provider + 29 个声明式 JSON provider（Anthropic、OpenAI、Google/Vertex、Azure、Bedrock、SageMaker、Databricks、Ollama、OpenRouter、LiteLLM、HuggingFace、Snowflake、xAI、DeepSeek、Groq、Mistral、Cerebras、NVIDIA、Zhipu/Z.ai、MiniMax、Moonshot、Alibaba、Perplexity、LM Studio…）；**本地推理**（llama.cpp，CUDA/Vulkan）；`toolshim` 给无原生工具调用的小模型；**ACP providers**（`claude_acp` / `codex_acp` / `copilot_acp` / `amp_acp` / `pi_acp`）把整个 Claude Code / Codex harness 当模型用并复用订阅；主 / fast / planner / editor 多模型分工。注意：goose 的 DeepSeek 声明式 provider（`providers/declarative/deepseek.json`）目录仍是 `deepseek-chat` / `deepseek-reasoner` @128k、走 OpenAI 兼容 Chat Completions，落后于 dsh 的 Messages 协议 + 1M 目录。
 
 **Claude Code**：仅 Claude；接入 Anthropic API、Bedrock、Claude Platform on AWS、Google Cloud Agent Platform（原 Vertex）、Microsoft Foundry、LLM 网关（如 LiteLLM）；**功能随供应商递减**（feature-availability 页）：Bedrock 无 WebSearch / fast mode / Advisor / Channels；所有第三方供应商无云会话、routines、Desktop（除 3P 版）、Chrome、computer use、Remote Control；auto mode 在第三方仅限 Sonnet 5 / Opus 4.7+ / Fable 且默认起始为 Manual。子代理/skill/workflow 各阶段可指定模型；effort、fast mode。
 
@@ -290,26 +317,26 @@ Cowork：插件市场（官方 11 + 组织私有）、Skills、Connectors 目录
 
 ---
 
-## 3. 评分矩阵（同模型前提）
+## 3. 评分矩阵（同模型前提，四方）
 
-| 维度 | goose | Cowork | Claude Code | 决定性因素 |
-|---|:---:|:---:|:---:|---|
-| Agent 循环 / 推理 harness | 3.5 | 4.5 | 5 | Claude Code 工具面最完整并为 Claude 深度调优 |
-| 本地文件 / 代码操作 | 4.5 | 4 | 5 | Read/Glob/Grep/检查点 vs goose 无边界 shell vs 授权文件夹 |
-| Office 文档产出 | 3 | 5 | 3.5 | Docs/Slides 编辑器 + Office 加载项 |
-| Computer use / 浏览器 | 2.5 | 4.5 | 4 | Chrome 集成 + 桌面内置浏览器 + 按应用授权 |
-| 分析与产出形态 | 3.5 | 4 | 4.5 | LSP / ultrareview / deep-research / Artifacts |
-| 运行效率 / 成本可控 | 4 | 3 | 4.5 | 可观测性 Claude Code 最强；换模型杠杆只有 goose 有 |
-| 记忆 | 3 | 3.5 | 4 | CLAUDE.md 层级 + auto memory + 子代理记忆 |
-| 上下文管理 | 4 | 4 | 5 | 1M、微压缩、压缩保留清单、rewind 摘要 |
-| MCP / API 接入 | 5 | 3.5 | 4.5 | goose 最开放；SDK 有商业/鉴权限制；Cowork 无 API |
-| 多 Agent / 调度 | 4 | 4 | 5 | 子代理/teams/workflows/routines/channels |
-| 安全与治理 | 4 | 4 | 4.5 | 沙箱 + 分类器 + 托管策略 vs VM vs 检查器链 |
-| 模型选择 | 5 | 1.5 | 2 | 60+ provider + 本地模型 vs 仅 Claude |
-| 平台入口 | 4.5 | 4.5 | 5 | CLI/IDE/桌面/Web/移动/Slack/CI 全覆盖 |
-| 可观测 / 可审计 | 4.5 | 2.5 | 4.5 | 开源 vs OTel + 分析 API |
-| 可嵌入 / 二次开发 | 5 | 1 | 4 | goosed/ACP/SDK/发行版 vs Agent SDK(API key、商业条款) vs 无 |
-| 生态 | 4 | 4 | 5 | 官方+社区市场规模 |
+| 维度 | goose | Cowork | Claude Code | dsh | 决定性因素 |
+|---|:---:|:---:|:---:|:---:|---|
+| Agent 循环 / 推理 harness | 3.5 | 4.5 | 5 | 4.5 | Claude Code 工具面最完整；dsh 与 DeepSeek 模型共训练、KV-cache 纪律最严，但仍是预览 |
+| 本地文件 / 代码操作 | 4.5 | 4 | 5 | 4.5 | dsh：read/write/edit/glob/grep/持久 PTY/LSP/后台 jobs |
+| Office 文档产出 | 3 | 5 | 3.5 | 3.5 | dsh 有 office skills + Office→PDF + `present` 交付 |
+| Computer use / 浏览器 | 2.5 | 4.5 | 4 | 3 | dsh 走实验性 Playwright/Chrome DevTools/Stagehand 与 Cua Driver |
+| 分析与产出形态 | 3.5 | 4 | 4.5 | 3.5 | dsh：LSP、web search（exa/perplexity/deepseek）、workflows、deliverables |
+| 运行效率 / 成本可控 | 4 | 3 | 4.5 | 4 | dsh：token meter 路由计价、spill、剪枝、PTC；DeepSeek 单价低 |
+| 记忆 | 3 | 3.5 | 4 | 2 | dsh 无内置记忆，只有 AGENTS.md + MCP 记忆 overlay + 会话检索 |
+| 上下文管理 | 4 | 4 | 5 | 4 | dsh：0.8 阈值 / 保留 16% / 先剪枝后摘要 / 图像卸载 / 1M 目录 |
+| MCP / API 接入 | 5 | 3.5 | 4.5 | 4 | dsh：MCP tools+resources（无 prompts、无 OAuth 文档）、ACP server（无 modes/fork/elicitation）、TS/Python SDK、webhook |
+| 多 Agent / 调度 | 4 | 4 | 5 | 4.5 | dsh：spawn/fork/ACP/Codex/Claude Code 子代理、workflows、ralph、实验 teams、会话内 schedule、webhook |
+| 安全与治理 | 4 | 4 | 4.5 | 3 | dsh：跨平台文件沙箱含 Windows，但不管网络；未经审计；会话日志默认上传 |
+| 模型选择 | 5 | 1.5 | 2 | 3.5 | dsh：DeepSeek 一等 + pi-ai 目录 + 自定义网关；无本地推理、无 OAuth 类 provider |
+| 平台入口 | 4.5 | 4.5 | 5 | 3 | dsh：Web UI、桌面 mac/win、headless、SDK；无 TUI、无 Linux 桌面、无移动端 |
+| 可观测 / 可审计 | 4.5 | 2.5 | 4.5 | 4.5 | dsh：append-only 日志、"模型可见即已记录"、OTel、会话检索；开源 |
+| 可嵌入 / 二次开发 | 5 | 1 | 4 | 5 | dsh：一切皆插件、profile/bundle、TS/Python SDK、ACP、MIT |
+| 生态 | 4 | 4 | 5 | 3 | dsh：发布一个月，`dsh-plugin` 话题起步，社区以中文为主 |
 
 ---
 
@@ -319,26 +346,28 @@ Cowork：插件市场（官方 11 + 组织私有）、Skills、Connectors 目录
 
 | 用途 | 推荐 | 理由 |
 |---|---|---|
-| 研发 / 编码 / 代码审查 / CI 自动化 | **Claude Code** | harness 最强；routines（API/GitHub 触发）、GitHub Actions、`/ultrareview`、worktree 并行 |
-| 把 agent 嵌进 Pions 产品（钻井仿真 / 实时数据 / 优化建议），可能私有化或离线，或需要换模型 | **goose 内核**（goosed API / ACP / 自定义发行版）；若锁定 Claude 且接受商业条款与 API key 计费，可选 Claude Agent SDK / Managed Agents | Cowork 无 API；Agent SDK 不得用订阅、不得以 Claude Code 品牌出现、无法接非 Claude 模型；goose 可接本地模型与任何 provider |
-| 需要 Claude Code harness 但保留多 provider / recipes / 可审计 | goose + `claude_acp` provider | 用 goose 壳包 Claude Code 引擎，扩展以 MCP 透传 |
-| 销售 / 市场 / 法务 / 管理的文档工作 | **Cowork（现 Claude 统一体验）** | Docs/Slides/Office 加载项、38+ connectors、零配置 |
+| 研发 / 编码 / 代码审查 / CI | **Claude Code** | harness 最强；routines（API/GitHub 触发）、GitHub Actions、`/ultrareview`、worktree 并行 |
+| 嵌进 Pions 产品（钻井仿真 / 实时数据 / 优化建议），可能私有化或离线，或需要换模型 | **goose 内核**（goosed API / ACP / 自定义发行版）；若锁定 Claude 且接受商业条款与 API key 计费，可选 Claude Agent SDK / Managed Agents | Cowork 无 API；Agent SDK 不得用订阅、不得以 Claude Code 品牌出现、无法接非 Claude 模型；goose 可接本地模型与任何 provider |
+| 主力模型是 DeepSeek 的场景 | goose + `dsh` ACP provider（第 5.3 节路径 1），或直接 dsh TS/Python SDK | 拿到与 DeepSeek 共训练的 harness；务必关闭 `dsh_session_log` 上传 |
+| 要 Claude Code harness 但保留多 provider / recipes / 可审计 | goose + `claude_acp` provider | 用 goose 壳包 Claude Code 引擎，扩展以 MCP 透传 |
+| 销售 / 市场 / 法务文档 | **Cowork（现 Claude 统一体验）** | Docs/Slides/Office 加载项、38+ connectors、零配置 |
 | 无人值守定时处理 | 数据在云 SaaS/GitHub → Claude Code routines 或 Cowork 云任务；数据在内网/边缘 → goose cron + recipe `retry/checks`，或 Claude Code 自托管环境 | 云任务碰不到内网；goose 调度需进程常驻 |
-| 需要审计模型每一步 | goose 或 Claude Code（OTel） | goose 可审代码；Claude Code 可导出指标与转录 |
+| 需要审计模型每一步 | goose 或 Claude Code（OTel）或 dsh（append-only 日志） | goose/dsh 可审代码；Claude Code 可导出指标与转录 |
 
-### 4.2 一次投入、三边通吃的公共层
+### 4.2 一次投入、四边通吃的公共层
 
-1. **MCP server**：把钻井仿真器、实时数据（WITSML/OPC）、地质模型封装成 MCP（Streamable HTTP + OAuth 最通用）。goose 与 Claude Code 直接接；Cowork 以"自定义远程 connector"接（需公网可达，或桌面端 stdio 本地 MCP）。
-2. **SKILL.md**：钻井 SOP、压力窗口计算流程、报告模板写成 agentskills.io 规范技能，放 `.claude/skills/`——goose 与 Claude Code 都读；Cowork/Claude 用同一规范。
+1. **MCP server**：把钻井仿真器、实时数据（WITSML/OPC）、地质模型封装成 MCP（Streamable HTTP 最通用；dsh 的 MCP client 无 OAuth 流程文档，内网部署用 header token）。goose / Claude Code / dsh 直接接；Cowork 以"自定义远程 connector"接。
+2. **SKILL.md**：钻井 SOP、压力窗口计算流程、报告模板写成 agentskills.io 规范技能。goose 与 Claude Code 读 `.claude/skills/`；dsh 读 `.agents/skills/`（goose 也读）——放 `.agents/skills/` 三者通吃。
 3. **子代理定义**：`.claude/agents/*.md`——goose 的 summon 与 Claude Code 都读。
-4. **项目指令**：写 `AGENTS.md`（goose 原生读），`CLAUDE.md` 里 `@AGENTS.md` 导入（Claude Code 官方推荐做法）。
+4. **项目指令**：写 `AGENTS.md`（goose、dsh 原生读），`CLAUDE.md` 里 `@AGENTS.md` 导入（Claude Code 官方推荐做法；dsh 也读 CLAUDE.md）。
 5. **会话可迁移**：goose 能导入 Claude Code 的 JSONL 转录，便于统一归档与审计。
 
 ### 4.3 需要提前认清的坑
 
 - goose：harness 调优是自己的活（可从改 `prompts/*.md` 与 developer 指令起步）；Linux/Windows 无沙箱、computer use 弱；调度依赖进程常驻；桌面沙箱仅 macOS；工具面薄（无原生 read/grep/web）。
-- Claude Code：仅 Claude；第三方供应商上功能明显缩水（无云会话、routines、Chrome、computer use、Bedrock 无 WebSearch）；Agent SDK 只能 API key 计费且不得复用订阅；agent teams / routines / channels / computer use 多为研究预览；原生 Windows 无沙箱；订阅限额与 Chat/Cowork 共享。
-- Cowork：数据默认进 Anthropic 云（含 connector 调用），钻井作业者的数据主权条款要先过；订阅限额在长任务上是瓶颈；产品形态正在变（9/16 合并）；无 API、不可白标、不可换模型。
+- Claude Code：仅 Claude；第三方供应商上功能明显缩水；Agent SDK 只能 API key 计费且不得复用订阅；agent teams / routines / channels / computer use 多为研究预览；原生 Windows 无沙箱；订阅限额与 Chat/Cowork 共享。
+- Cowork：数据默认进 Anthropic 云（含 connector 调用）；订阅限额在长任务上是瓶颈；产品形态正在变（9/16 合并）；无 API、不可白标、不可换模型。
+- dsh：开发者预览、明示会有破坏性变更；Node ≥22.19、pnpm 11、291 包与 Cordis 学习曲线；**会话日志与插件清单默认随请求上传 DeepSeek**；沙箱不管网络；无内置记忆；无 TUI 与 Linux 桌面；SAFETY.md 自述未审计。
 
 ### 4.4 一个可行的混合架构
 
@@ -347,19 +376,93 @@ Pions 平台(内网/边缘)                      研发                      办
 ┌────────────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
 │ goosed (自定义发行版)       │   │ Claude Code          │   │ Claude(原 Cowork)    │
 │  ├ provider: 本地/私有模型  │   │  CLI/IDE/routines    │   │  connectors: 邮件/   │
-│  │   或 Claude via Bedrock  │   │  .claude/agents      │   │  Slack/CRM/Drive     │
-│  ├ MCP: 仿真器/实时数据/    │◄──┼──MCP + SKILL.md──────┼──►│  自定义 connector →  │
-│  │   地质模型/报告生成       │   │  CLAUDE.md @AGENTS.md│   │  Pions 数据(只读)    │
-│  ├ recipes + cron: 日报/预警 │   │  sandbox + hooks     │   │  Skills: 同一套      │
-│  └ hooks: 审计/合规拦截      │   │  OTel → 统一观测     │   │  Docs/Slides 产出    │
-└────────────────────────────┘   └──────────────────────┘   └──────────────────────┘
+│  │   / Claude via Bedrock   │   │  .claude/agents      │   │  Slack/CRM/Drive     │
+│  │   / DeepSeek via dsh-acp │◄──┼──MCP + SKILL.md──────┼──►│  自定义 connector →  │
+│  ├ MCP: 仿真器/实时数据/    │   │  CLAUDE.md @AGENTS.md│   │  Pions 数据(只读)    │
+│  │   地质模型/报告生成       │   │  sandbox + hooks     │   │  Skills: 同一套      │
+│  ├ recipes + cron: 日报/预警 │   │  OTel → 统一观测     │   │  Docs/Slides 产出    │
+│  └ hooks: 审计/合规拦截      │   └──────────────────────┘   └──────────────────────┘
+└────────────────────────────┘
 ```
 
 ---
 
-## 5. 附录
+## 5. DeepSeek Harness（dsh）深度对比与 goose 补短板分析
 
-### 5.1 goose 源码索引（本次调研触达的关键文件）
+### 5.1 dsh 是什么（源码事实）
+
+| 项目 | 事实 |
+|---|---|
+| 仓库 / 许可 / 状态 | `deepseek-ai/deepseek-harness`，MIT；2026-08-13 开发者预览，README 明示"会有破坏兼容性的变更"；本次克隆 v0.1.6-alpha.2（2026-09-17）；GitHub org 页显示约 22.8 万 star |
+| 技术栈与规模 | TypeScript / Node ≥22.19、pnpm 11；291 个 `@deepseek-ai/dsh-*` 包（`packages/<group>/<pkg>`），约 76 万行 TS（含测试与生成物）；2206 份 `.agents/notes` 决策记录；CI 要求 `packages/*/*/src` 每文件 100% 覆盖；`CLAUDE.md → AGENTS.md` 软链 + `.claude/skills`——**用 agent 开发 agent harness** |
+| 内核 | Cordis（"时空可组合性"元框架，源自 Koishi 聊天机器人框架，vendored）：插件贡献服务、类型化事件与可回滚副作用；模型适配器、工具注册表、会话日志、agent loop 都是可替换插件（`docs/architecture.md`） |
+| 组装模型 | profile（`web` / `headless` / `sdk` / `sdk-minimal` / `acp` / 桌面专属 `desktop`）= 有序 bundle 层 + 用户 `cordis.patch.yml` + `--patch` 覆盖；`dsh-base` 是共享底层；HMR 热重载 |
+| 交互面 | Web UI（`npx @deepseek-ai/dsh web` → 127.0.0.1:3080）、Electron Desktop（mac arm64/x64、win x64，**Linux 非发布目标**）、headless 一次性 CLI、TS/Python SDK（JSON-RPC stdio）、ACP server（automation-only）；**无交互式 TUI** |
+| 模型 | `deepseek-official`：Messages（默认）与 Chat Completions 双协议，默认目录 `deepseek-flash`（图像）/`deepseek-v4-pro`（文本）均 1M 上下文，思考 effort `off/low/high/max`，Files API 传图，reasoning passback；`llm-pi-ai`：anthropic / openai / moonshotai / zai 等目录 + 自定义 `openai-completions` / `openai-responses` / `anthropic-messages` 网关；OAuth 类 provider（如 Codex）暂不支持；无本地推理 |
+| 工作模式（agent presets） | **标准**：bash/pwsh、read/write/edit、glob/grep（内置 `@vscode/ripgrep`）、后台 jobs、skills、goal、plan mode、compaction + 工具结果剪枝、subagent（spawn/fork/Codex/Claude Code）、workflow + `ralph`、ask_user、todo、web_search/web_fetch、present、plugin_manager；**PTC**：同上但其他工具通过 `run_code` 生成的 TypeScript SDK 呈现（类似 goose Code Mode）；**极简**：固定 persona、**仅一个持久 bash 工具**、无压缩、无运行时上下文——DeepSeek 公开基准所用；**创造**：标准 + Cordis 运行时检查 + 持久插件管理，用于编写新 preset |
+| 循环 | turn/step 事件模型；`agent/pre-step`、`agent/request`、`llm/stream`、`tools/pre-execute → execute → post-execute` 瀑布；并行工具默认 10（unary parallel-safe 分类，exclusive 为屏障）；`run_code` 子调用并发 10；`llm-retry` 在步边界重试 |
+| 会话日志 | append-only `SessionEvent` 日志是模型上下文的唯一真源，`deriveMessages()` 投影历史；**"模型可见 ⟺ 已记录"是运行时不变量**；JSONL(+zstd) 持久化、版本化迁移、fork/resume/telemetry 全部由日志派生 |
+| 上下文 | `compaction-basic`：阈值 0.8、保留最近 16%（`retainRatio`）、先 `tool-result-pruner` 剪枝再摘要、溢出后重试 1 次；`spill` 策略把超限工具结果落盘并留头尾预览；`token-meter` 按路由计价（含 DeepSeek 视觉 token 网格）；`image/offload` |
+| KV-cache 纪律 | 系统提示作为历史 surface node，模型目录声明 `systemPromptUpdate: in-history` 时提示变化**追加在缓存历史之后**；工具目录跨模式稳定（`exit_plan_mode` 常驻以免 schema 变动）；每个包 README 都有"Model Experience / Token effect / KV Cache effect"三段 |
+| 记忆 | **无内置记忆**；`agent-instructions` 加载 AGENTS.md / CLAUDE.md（用户全局 + 项目向上遍历，编辑后刷新）；记忆靠 MCP overlay（文档给出 Memorix / MCP reference memory / Engram，默认关闭）；`session-query` 提供 SQLite 全文检索历史会话（5 个只读工具） |
+| 多 Agent | subagent seam 多 provider 并存：in-process spawn / fork（继承历史）/ ACP / **Codex（app-server 协议）/ Claude Code（Agent SDK，捆绑平台 CLI 载荷）**/ dsh-sdk；continuable children + `send_message`/`interrupt_agent`/`list_agents`；通用后台 jobs；workflow（模型写 JS，`agent()` 编排，元数据词汇与 Claude Code dynamic workflows 一致）+ `ralph` 固定循环；实验 Agent Teams（roster / 任务 DAG / mailbox）；会话内 schedule（after / at / every ≥5 分钟）；GitHub webhook 触发 fire-and-forget 会话 |
+| 权限与沙箱 | permission preset = sandbox mode（`read-only` / `workspace-write` / `danger-full-access`）+ approval policy（`ask` / `never`），默认 `workspace-write + ask`；实验性 Auto review（用当前模型审每次调用）；沙箱后端 Linux bwrap→Landlock（静态 `landlock-run`）、macOS Seatbelt、**Windows ACL restricted token**、SSH 远程；**只管文件效应，不管网络、进程、设备**；guard：重复调用提醒 + 超时；SAFETY.md："未经安全审计，不得视为生产可用" |
+| 接入 | MCP client：stdio / Streamable HTTP + headers、重连退避、Tools + Resources（**Prompts 未消费**，无 OAuth 流程文档）；ACP server：v1 `session/new|list|resume|close`、`set_config_option`（model / reasoning_effort）、`prompt`、`request_permission`，**不支持 modes、fork、elicitation、client fs**；Claude Code / Codex `hooks.json` 桥（仅 7/30 事件且多为部分支持）；skills 扫描 `.dsh/skills`、`.agents/skills`、`~/.dsh/skills`、`~/.agents/skills`（不读 `.claude/skills`，除非 `customSkillDirs`）；LSP 工具（4 种操作）；web search provider exa / perplexity / deepseek；office skills（docx/pptx/xlsx，Python 脚本）+ Office→PDF（LibreOffice kit） |
+| 数据出境（重要） | `dsh_session_log` **默认开启**：每次请求把会话日志增量（cwd、系统提示、用户内容、工具参数/结果、压缩摘要、插件事件…）作为请求体附加字段上传到 DeepSeek 官方端点或配置的 `baseURL` 网关，`enabled: false` 关闭；`dsh_plugin_packages` 上报插件清单；`x-deepseek-harness-user-id` 匿名 ID；OTel 会话遥测默认 `FEEDBACK_ONLY`（仅用户主动反馈时释放前缀） |
+| 基准（第三方转述，未核实） | DeepSeek V4 Flash 0731 在 dsh 极简模式：Terminal-Bench 2.1 82.7（4 月预览 61.8）、DeepSWE 54.4（vs 7.3）；findharness.com 称 DSH Minimal 在 DeepSWE v1.1 得 72.6 vs Claude Code 69.8 / Codex 65.6 / OpenCode 65.5。来源与模型版本不一致，只作方向性参考 |
+
+**关键洞察**：极简模式的持久 bash 工具描述（"does NOT need to be XML-escaped"、"State is persistent across command calls"…）与可选的 `str_replace_editor`（`view/create/str_replace/insert`，与 Anthropic text_editor 同款接口）是模型在后训练中见过的工具分布。Terminal-Bench 从 61.8 到 82.7 的跃升来自**后训练对齐同一 harness**，而不是 harness 本身多聪明——这与 Claude Code 之于 Claude 是同一件事。
+
+### 5.2 dsh vs goose 逐维度（harness 层）
+
+| 维度 | goose（源码） | dsh（源码） | 差距 |
+|---|---|---|---|
+| 工具面 | write / edit / shell / tree / read_image；读靠 `cat/sed`，搜靠 `rg` | read（窗口）/ write / edit / glob / grep（内置 ripgrep）/ bash + 持久 PTY（6 个 terminal 工具）/ run_in_background + `job_*` / lsp / web_search / web_fetch / ask_user / todo / present / skill / subagent 族 / workflow / ralph / goal / schedule | dsh 明显更完整，且工具 schema 与模型共训练 |
+| 工具执行管线 | 五检查器 + 并发 `select_all` + 最大轮数 | 瀑布 pre/execute/post + unary parallel-safe 分类 + 屏障 + 重复提醒 + 超时 + spill | 等价，dsh 的并行安全分类更细 |
+| 上下文 | 80% 压缩 + 工具配对摘要 + >200k 字符落盘（无预览） | 0.8 / 保留 16% + 剪枝先于摘要 + spill 头尾预览 + 路由计价 token meter + 图像卸载 | dsh 更精细；goose 有 CLI 多策略兜底 |
+| KV-cache | Anthropic cache_control 三处；MOIM 每轮以新时间戳注入到尾部附近（`moim.rs` 在最后一条 assistant 前插入），尾部数条无法命中缓存；动态启停扩展改变工具列表 | 系统提示作为历史节点 + `in-history` 追加；工具目录跨模式稳定；每包文档化缓存效应 | dsh 更严谨（DeepSeek 磁盘缓存计费驱动） |
+| 记忆 | memory 扩展 + chatrecall + hints + MOIM | 无内置；AGENTS.md + MCP overlay + session-query | goose 更好 |
+| 沙箱 | 仅 macOS seatbelt + 出口代理（域名黑名单） | Linux bwrap/Landlock + macOS Seatbelt + Windows ACL；无网络控制 | 各半：dsh 跨平台文件沙箱，goose 有网络出口 |
+| 权限 | 4 模式 + 逐工具 + LLM 只读判定 + adversary/egress/注入扫描 | sandbox mode × approval policy 预设 + 实验 Auto review | goose 检查器更多；dsh 结构更清晰 |
+| 子代理 | summon delegate（可指定 provider/model，async ≤5）；`.claude/agents` | spawn/fork/ACP/Codex/Claude Code/dsh-sdk 多后端 + continuable + teams（实验） | dsh 后端更多；goose 的 `delegate(provider=claude-acp)` 已可等价 |
+| 编排/自动化 | recipes（重试/成功校验/schema）+ cron + hooks 13 事件 | workflow 脚本 + ralph + 会话内 schedule + webhook + Claude Code/Codex hooks 桥（7 事件） | 各有独有物：goose recipes vs dsh workflows |
+| 模型 | 60+ provider + 本地推理 + toolshim | DeepSeek 一等 + pi-ai 目录 + 自定义网关 | goose 更广；dsh 对 DeepSeek 更深（Messages、1M、Files、effort） |
+| 可嵌入 | goosed HTTP/SSE + ACP server + uniffi 脚手架 | TS/Python SDK + ACP server（automation-only） | 相当 |
+| 界面 | Desktop 三平台 + CLI + TUI + Telegram | Web UI + Desktop mac/win + headless | goose 更广 |
+| 治理 | 遥测默认关；开源 | 会话日志默认上传；未审计；开源 | goose 更稳妥 |
+
+### 5.3 goose 能否用 dsh 补 harness 短板：三条路径
+
+**路径 1（借力，1–2 周）：把 dsh 当 goose 的 ACP provider**
+
+- 实现：新增 `crates/goose/src/providers/dsh_acp.rs`，照抄 `claude_acp.rs` / `codex_acp.rs` 的 `ProviderDef` 模式：`command = dsh`（npm 全局 `@deepseek-ai/dsh`），`args = ["--profile", "acp"]`；goose 扩展经既有 `extension_configs_to_mcp_servers()` 透传（dsh ACP `session/new` 接受 stdio / HTTP MCP 并在发布前校验）；模型与 effort 经既有 `send_set_config_option()`（dsh 暴露 `model` / `reasoning_effort` 选项）；权限经既有 `handle_permission_confirmation()` 路由（dsh 用 `session/request_permission` 一次性允许/拒绝）；`session_mode_id = None`（dsh ACP 不支持 modes，goose 的 auto/approve 用 dsh 侧 `cordis.patch.yml` 的 permission preset 表达，如 `danger-full-access + never` 对应 goose `auto`）。
+- 收益：goose 立即获得 dsh 完整工具面与 DeepSeek 共训练的 harness，同时保留 goose 的 UI / recipes / 调度 / 多 provider / 会话库；与现有 `claude_acp` 并列，Pions 可按模型族切换 harness。
+- 限制：与其它 ACP provider 相同——goose 侧无 resume/fork；goose 检查器只能看到 ACP 工具事件（dsh 内部执行）；Node 运行时依赖；dsh 预览期 API 变动；**必须在 dsh 侧 patch `session-log-deepseek: enabled: false`** 并按需关闭 `plugin-package-inventory-deepseek`。
+
+**路径 2（内化，1–2 个季度）：把 dsh 的设计要素移植进 goose Rust 内核**（MIT → Apache-2.0 兼容，可直接借鉴甚至翻译代码与文档）
+
+| 要素 | goose 现状 | 移植建议 | 杠杆 |
+|---|---|---|---|
+| 工具面 | 5 个 developer 工具 | 增加 `read`（行号/窗口）、`glob`/`grep`（内置 ripgrep：goose 已依赖 `ignore` crate，可加 `grep-*` crates）、持久 PTY terminal（`portable-pty`）、`run_in_background` + `job_*`、`str_replace_editor` 兼容接口、`present` 交付 | 高 |
+| **按模型族切换工具画像** | `toolshim`、developer 指令按 OS 分流 | 新增"tool profile"：DeepSeek 路由用 dsh 极简/标准模式的工具名与描述（含 `str_replace_editor`），Claude 路由用 Read/Edit/Bash/Grep/Glob 命名，其它模型用通用集；这是"对齐共训练分布"，改动小、收益大 | **最高** |
+| 上下文 | >200k 字符落盘无预览；配对摘要 | spill 头尾预览 + 每工具上限；剪枝档位先于摘要；`retainRatio` 保留尾部；按路由计价的 token meter | 中 |
+| KV-cache 纪律 | MOIM 时间戳每轮变动；扩展启停改工具列表 | 稳定工具目录（模式切换只改提示段）；系统提示变化追加到历史尾部（对支持的 API）；MOIM 降低时间戳粒度或移到系统提示尾部 | 中 |
+| 沙箱 | 仅 macOS seatbelt | Linux Landlock（Rust `landlock` crate）+ bwrap、Windows restricted token，复用 dsh 的 `sandbox-local` 设计与 `landlock-run` 契约；再叠加 goose 已有的出口代理即超越 dsh | 高 |
+| 会话日志 | sessions.db 存消息，MOIM/hints 注入不落库 | 采纳"模型可见 ⟺ 已记录"：把每轮注入写入会话事件，回放/审计/训练数据一致 | 中 |
+| DeepSeek provider | `deepseek.json` 停留在 deepseek-chat/reasoner @128k、OpenAI 兼容 | 更新目录（deepseek-flash / v4-pro @1M）、Messages 协议、effort、Files 传图、reasoning passback | 高（若主力 DeepSeek） |
+| 子代理后端 | `delegate` 已支持 `provider` 参数 | 直接用 `claude-acp` / `codex-acp` / 未来 `dsh-acp` 作子代理 provider——无需新做 | 已具备 |
+
+**路径 3（战略）：训练侧对齐**
+
+goose 作为开源 harness 的最大机会不是再造工具，而是成为开源模型的"训练 harness"：与模型方（DeepSeek / Qwen / Kimi / GLM）共建 RL 环境，让模型在 goose 的工具分布上后训练。短期可行动：用 recipes + `goose-self-test.yaml` + `evals/open-model-gym` 搭 Terminal-Bench 类评测流水线，量化路径 2 中"工具画像"改动的收益；这也是 Pions 评估任何 harness 改动的唯一可靠尺子。
+
+**结论**：goose 的 harness 短板**可以补，但分两层**——工具面 / 上下文 / 沙箱这一层靠移植 dsh 设计 1–2 个季度可补齐并有望反超（goose 有网络出口代理、多 provider、记忆、TUI）；"模型共训练"这一层 goose 自身代码消除不了，只能通过路径 1 借力或路径 2 的工具画像对齐来逼近。对 Pions：主力模型是 DeepSeek → goose + dsh-acp（或直接 dsh SDK）；主力是 Claude → goose + claude-acp；两条路都要在 dsh/Claude 侧处理数据出境。
+
+---
+
+## 6. 附录
+
+### 6.1 goose 源码索引（本次调研触达的关键文件）
 
 | 主题 | 路径 |
 |---|---|
@@ -372,7 +475,7 @@ Pions 平台(内网/边缘)                      研发                      办
 | 记忆 / 历史检索 / 提示文件 / MOIM | `crates/goose-mcp/src/memory/mod.rs`, `agents/platform_extensions/chatrecall.rs`, `hints/load_hints.rs`, `agents/moim.rs` |
 | 上下文压缩 / 大输出 | `crates/goose/src/context_mgmt/mod.rs`, `agents/large_response_handler.rs`, `prompts/compaction.md` |
 | MCP 宿主 | `crates/goose/src/agents/extension_manager.rs`, `agents/mcp_client.rs`, `agents/extension.rs` |
-| Provider 注册 / Anthropic 缓存 / Claude Code 与 ACP provider | `crates/goose/src/providers/init.rs`, `providers/formats/anthropic.rs`, `providers/anthropic.rs`, `providers/claude_code.rs`, `providers/claude_acp.rs`, `providers/declarative/*.json` |
+| Provider 注册 / Anthropic 缓存 / Claude Code 与 ACP provider / DeepSeek 声明式 provider | `crates/goose/src/providers/init.rs`, `providers/formats/anthropic.rs`, `providers/anthropic.rs`, `providers/claude_code.rs`, `providers/claude_acp.rs`, `providers/codex_acp.rs`, `acp/provider.rs`, `providers/declarative/deepseek.json` |
 | 子代理 / 编排 / 调度 | `agents/platform_extensions/{summon,orchestrator}.rs`, `agents/subagent_*.rs`, `scheduler.rs`, `agents/schedule_tool.rs` |
 | Recipes / 重试 / 结构化输出 | `crates/goose/src/recipe/`, `agents/retry.rs`, `agents/final_output_tool.rs` |
 | Skills / Plugins / Hooks / Review checks / `.claude` 兼容 | `crates/goose/src/skills/`, `plugins/`, `hooks/mod.rs`, `checks/mod.rs`, `sources.rs` |
@@ -381,7 +484,7 @@ Pions 平台(内网/边缘)                      研发                      办
 | Code Mode / Apps / MCP-UI | `agents/platform_extensions/code_execution.rs`, `goose_apps/`, `documentation/docs/guides/interactive-chat/mcp-ui.md` |
 | 可观测性 | `crates/goose/src/tracing/`, `otel/`, `posthog.rs` |
 
-### 5.2 Claude Code 关键事实（官方文档，2026-09）
+### 6.2 Claude Code 关键事实（官方文档，2026-09）
 
 | 主题 | 事实 |
 |---|---|
@@ -402,7 +505,7 @@ Pions 平台(内网/边缘)                      研发                      办
 | Agent SDK | Python/TS；仅 API key；不得为第三方产品提供 claude.ai 登录；商业条款；品牌限制 |
 | 第三方供应商 | Bedrock/Agent Platform/Foundry/Claude Platform on AWS：无云会话、routines、Desktop（除 3P）、Chrome、computer use；Bedrock 无 WebSearch |
 
-### 5.3 Cowork 时间线（2026）
+### 6.3 Cowork 时间线（2026）
 
 | 日期 | 事件 |
 |---|---|
@@ -419,9 +522,27 @@ Pions 平台(内网/边缘)                      研发                      办
 | 09-10 | Enterprise 默认开启 |
 | 09-16 | Cowork 并入统一 Claude；Claude Docs / Slides / Design 发布 |
 
-### 5.4 资料来源
+### 6.4 DeepSeek Harness 源码索引（克隆于会话 scratchpad，commit `ddefc45`）
+
+| 主题 | 路径（仓库内） |
+|---|---|
+| 架构 / 循环 / 事件 | `docs/architecture.md`, `docs/agent-lifecycle.md`, `docs/event-producer-consumer.md`, `packages/core/agent-loop/README.md` |
+| 工具目录（生成） | `docs/tool-catalog.md`；工具注册表 `packages/core/tools/README.md` |
+| 工作模式 | `packages/preset/agent-presets/presets/{standard,ptc,minimal,cordis}/agent.cordis.yml` |
+| 上下文 | `docs/subsystems/compaction.md`, `packages/compaction/compaction-basic/README.md`, `docs/subsystems/spill.md`, `docs/subsystems/token-meter.md` |
+| 模型适配 / 缓存效应 | `packages/llm/llm-deepseek/README.md`, `packages/llm/llm-pi-ai/README.md`, `docs/user/guide/providers.md` |
+| DeepSeek 请求扩展（会话日志上传） | `docs/deepseek-llm-api-wire-extensions.md`, `packages/session/session-log-deepseek/README.md`, `packages/session/session-telemetry-otel/README.md` |
+| 沙箱 / 权限 | `docs/subsystems/{sandbox,approval,permission-presets}.md`, `packages/sandbox/README.md`, `native/system/README.md`, `packages/experimental/auto-review/README.md` |
+| 子代理 / 编排 | `docs/subsystems/{subagent,agent-team,jobs,workflow,ptc-runtime,schedule,webhook,goal,plan}.md`, `packages/subagent/README.md`, `packages/subagent/subagent-claude-code/README.md` |
+| 接入 | `packages/acp/acp/README.md`, `packages/sdk/README.md`, `python/README.md`, `packages/mcp/mcp-client/README.md`, `docs/subsystems/mcp.md`, `packages/hooks/hooks-claude-code/README.md`, `docs/subsystems/skills.md` |
+| 界面 | `apps/cli/README.md`, `packages/bundle/web-app/README.md`, `apps/desktop/README.md` |
+| 安全声明 | `SAFETY.md` |
+
+### 6.5 资料来源
 
 **Claude Code（官方文档，code.claude.com/docs/en/…）**：overview、changelog、tools-reference、permissions、permission-modes、sandboxing、security、mcp、hooks、memory、context-window、agents、sub-agents、agent-teams、workflows、routines、claude-code-on-the-web、desktop、chrome、computer-use、channels、costs、agent-sdk/overview、third-party-integrations、feature-availability。
+
+**DeepSeek Harness**：github.com/deepseek-ai/deepseek-harness 源码（上表）；The New Stack "DeepSeek open sources an agent harness where everything is a plugin"；InfoQ "The Open-Sourcing of DeepSeek Harness…"；Pandaily "DeepSeek Harness Hands-On: Four Work Modes…"；CometAPI "DeepSeek V4 Flash 0731 & DeepSeek Harness"；findharness.com "Which Harness Runs DeepSeek V4 Best?"；cordiverse/cordis 与论文 "A Programming Paradigm for Spatiotemporal Composability"（arXiv 2608.25512）。基准数字均为第三方转述。
 
 **Cowork**：
 - VentureBeat：Anthropic launches Cowork（2026-01）；Anthropic is killing off Cowork and folding it into Claude chat, launching Claude Docs and Claude Slides（2026-09-16）
