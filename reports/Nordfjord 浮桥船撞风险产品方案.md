@@ -1,6 +1,6 @@
 # 让被否决的Anda–Lote浮桥成为王牌Demo
 
-原课题假设的Anda–Lote浮桥在现实中已被三道关口否决。Kystverket在2024年12月8日坚持**75 m净空、200 m净宽、20 m水深**的通航包络，并判断大型邮轮在风中"最可能搁浅"；Statens vegvesen在2025年以Nordfjorden属于"hovudlei"（主航道）为由劝退开启桥方案；交通部约在2026年初宣布该方案"不可行"([Fjordabladet](https://www.fjordabladet.no/nyhende/i/EyEW93/skip-ville-mest-sannsynleg-gaatt-paa-grunn); [NRK](https://www.nrk.no/rogaland/departement-skrotar-bruforslag-i-nordfjord-1.17802785))。因此Demo不应假装在为它做设计，而应把"**为什么不可行、怎样才能可行**"作为核心故事：先用同一套引擎定量复现监管结论，再搜索能把"年概率≥10⁻⁴的最大船型"压下来的几何与运营组合。物理账本已经说明了监管立场的来由：约87,300 t排水量的Iona/AIDAnova级邮轮以6–12 kn正撞，动能约**0.44–1.75 GJ**，而Bjørnafjorden的梁撞设计能量只有**250 MJ**，Nordhordland在役浮筒复核时连约**25 MJ**都承受不了。所以决定可行性的是"让邮轮碰不到"的几何和航速制度，浮筒强度不起决定作用。产品层面，市场上没有一款商用工具把交通频率（IWRAP、SAMSON、COLLRISK、COLLIDE）、操纵物理（SimFlex等）和结构后果（LS-DYNA/USFOS）串成一条可审计的链。Chalmers/RISE的STAPS-cons在学术上证明了这条链可以打通，并发现IWRAP算出的撞桥概率约为仿真结果的**4.5倍**([Chalmers](https://research.chalmers.se/en/publication/545746))。建议Pions分三步走：先以开源OMRAT复现IWRAP，做成"IWRAP Copilot"切入；再叠加STAPS式Monte Carlo、降阶浮桥碰撞模型、代理模型+NSGA-II优化和由MCP驱动的LLM Agent；最终延伸为运营态预警孪生。需求窗口集中在2026–2028年，驱动因素包括NTSB点名68座美国桥、AASHTO规范修订、N400与挪威大陆架（NCS）的10⁻⁴准则，以及英国海上风电的通航风险评估（NRA）。离Pions钻井业务最近的滩头是NCS海上设施的过往船舶碰撞评估。需要强调：本报告多数数字来自搜索摘要而非原文，只有OMRAT源码以及NOAA、MET Norway等的GitHub文档被完整读过。对外使用任何数字之前，都必须按第七节的可信度分级回查原文。
+原课题假设的Anda–Lote浮桥在现实中已被三道关口否决。Kystverket在2024年12月8日坚持**75 m净空、200 m净宽、20 m水深**的通航包络，并判断大型邮轮在风中"最可能搁浅"；Statens vegvesen在2025年以Nordfjorden属于"hovudlei"（主航道）为由劝退开启桥方案；交通部约在2026年初宣布该方案"不可行"([Fjordabladet](https://www.fjordabladet.no/nyhende/i/EyEW93/skip-ville-mest-sannsynleg-gaatt-paa-grunn); [NRK](https://www.nrk.no/rogaland/departement-skrotar-bruforslag-i-nordfjord-1.17802785))。因此Demo不应假装在为它做设计，而应把"**为什么不可行、怎样才能可行**"作为核心故事：先用同一套引擎定量复现监管结论，再搜索能把"年概率≥10⁻⁴的最大船型"压下来的几何与运营组合。物理账本已经说明了监管立场的来由：约87,300 t排水量的Iona/AIDAnova级邮轮以6–12 kn正撞，动能约**0.44–1.75 GJ**，而Bjørnafjorden的梁撞设计能量只有**250 MJ**，Nordhordland在役浮筒复核时连约**25 MJ**都承受不了。所以决定可行性的是"让邮轮碰不到"的几何和航速制度，浮筒强度不起决定作用。产品层面，市场上没有一款商用工具把交通频率（IWRAP、SAMSON、COLLRISK、COLLIDE）、操纵物理（SimFlex等）和结构后果（LS-DYNA/USFOS）串成一条可审计的链。Chalmers/RISE的STAPS-cons在学术上证明了这条链可以打通，并发现IWRAP算出的撞桥概率约为仿真结果的**4.5倍**([Chalmers](https://research.chalmers.se/en/publication/545746))。建议分三步走：先以开源OMRAT复现IWRAP，做成"IWRAP Copilot"切入；再叠加STAPS式Monte Carlo、降阶浮桥碰撞模型、代理模型+NSGA-II优化和由MCP驱动的LLM Agent；最终延伸为运营态预警孪生。需求窗口集中在2026–2028年，驱动因素包括NTSB点名68座美国桥、AASHTO规范修订、N400与挪威大陆架（NCS）的10⁻⁴准则，以及英国海上风电的通航风险评估（NRA）。离现金流较近的滩头之一是NCS海上设施的过往船舶碰撞评估。需要强调：本报告多数数字来自搜索摘要而非原文，只有OMRAT源码以及NOAA、MET Norway等的GitHub文档被完整读过。对外使用任何数字之前，都必须按第七节的可信度分级回查原文。
 
 ## 一、Anda–Lote三度被否，留下了一道可复现的"监管考题"
 
@@ -83,7 +83,7 @@ Kystverket有五个VTS中心，离此最近的Fedje VTS北界止于Sognesjøen([
 
 政治上要格外谨慎。内峡湾政界把2024年的研究委托看作对2014年选线的"omkamp"（翻案）([SMP](https://www.smp.no/nyheter/n/xmVm9Q/fryktar-omkamp-om-nordfjordkryssinga))。Demo必须明确定位为方法演示：不使用Nordfjordbrua的品牌，主动邀请Kystverket和Statens vegvesen审阅。从2024年7月委托到约2026年3月否决，这一过程用了约20个月。由此可以引出一个独立的产品用例：帮监管方快速筛查地方提出的低成本方案（推断）。
 
-## 二、没有商用工具串起频率、物理与后果，这就是Pions的切口
+## 二、没有商用工具串起频率、物理与后果，这就是本项目的切口
 
 ### 竞品格局：频率工具、操纵仿真、结构FE各自为政
 
@@ -141,8 +141,8 @@ IWRAP按用户计费，每年€2.8–6k，这是桌面"频率计算器"的低�
 | T2 | Physics Design Twin | 业主与设计院 | 超越曲线、设计船型阶梯、STAPS式仿真、浮桥ROM、NSGA-II减险优化与UQ |
 | T3 | Operational Allision Twin | 桥梁业主、VTS、海上设施运营商 | 由后果驱动的预警阈值、道路封闭触发、VTS插件、实测虚警与漏警KPI |
 
-对Pions来说，Nordfjord和Key Bridge是用来展示能力的旗舰案例，未必是第一笔收入的来源，第一笔收入更可能来自另外三个方向：
-- **NCS海上设施的过往船舶碰撞评估**：它与钻井客户群高度重叠，监管准则同为10⁻⁴，现有的COLLIDE已经过时；平台、浮式设施或钻井装置在引擎里只是"结构对象"的另一种类型（推断）。
+Nordfjord和Key Bridge是用来展示能力的旗舰案例，未必是第一笔收入的来源，第一笔收入更可能来自另外三个方向：
+- **NCS海上设施的过往船舶碰撞评估**：监管准则同为10⁻⁴，现有的COLLIDE已经过时；平台、浮式设施或钻井装置在引擎里只是"结构对象"的另一种类型（推断）。
 - **咨询公司白标**：咨询公司目前用手工方式把IWRAP、SAMSON、COLLRISK和FE拼在一起。白标引擎帮他们省人工，而不是去和他们争业主。
 - **美国研究市场**：用来放大规模。
 
@@ -320,7 +320,7 @@ Askeland等人（NPRA/COWI/DTU，2021）在E39极端峡湾跨越的分析中，�
 
 第二层价值是P_C的本地化。先验取IALA默认值，似然取本地近撞桥检测计数。Hänninen & Kujala发现碰撞概率对P_C"非常敏感"([TransNav](https://www.transnav.eu/Article_The_Effects_of_Causation_Probability_H%C3%A4nninen,13,207.html))，而人工复核只确认了约40%的自动标记，所以检测器必须保留人工复核环节，并公布检测精度。
 
-第三层价值是代理模型。它承担FE级的输出量，例如穿透深度、破口面积和立柱塑性转角。已有研究的水平可作参照：船船碰撞损伤代理的R²约为0.72–0.79，单次推理约0.1 s([EAAI 2025](https://www.sciencedirect.com/science/article/pii/S0952197625001587))；2016年已有研究用ANN在Monte Carlo中替代FE([Ships & Offshore Structures](https://www.tandfonline.com/doi/abs/10.1080/17445302.2016.1258759))。把模态方程写进损失函数、只学习接触律的PINN，文献中尚无先例，可以作为Pions自有的研发点。
+第三层价值是代理模型。它承担FE级的输出量，例如穿透深度、破口面积和立柱塑性转角。已有研究的水平可作参照：船船碰撞损伤代理的R²约为0.72–0.79，单次推理约0.1 s([EAAI 2025](https://www.sciencedirect.com/science/article/pii/S0952197625001587))；2016年已有研究用ANN在Monte Carlo中替代FE([Ships & Offshore Structures](https://www.tandfonline.com/doi/abs/10.1080/17445302.2016.1258759))。把模态方程写进损失函数、只学习接触律的PINN，文献中尚无先例，可以作为本项目自有的研发点。
 
 第四层是NSGA-II优化：
 - **决策变量**：开口宽度和位置、牺牲浮筒与护舷、限速、拖轮、VTS、预警系统、大风关闭阈值；
@@ -436,7 +436,7 @@ P3阶段的付费试点有四个候选方向：
 - **3D与前端工程师**：负责Cesium和3D Tiles；
 - **LLM与Agent工程师**：负责MCP、RAG和评测。
 
-外部兼职顾问三类：挪威航海顾问（退役引航员或前Kystverket人员）、学术合作方（Chalmers/RISE或NTNU/UiS的Sha、Amdahl团队）、N400与AASHTO方面的规范顾问。Pions现有的物理+AI团队可以直接承担ML/UQ和ROM，新增人员主要集中在海事领域知识和数据准入。这是本报告的组织建议，不来自资料。
+外部兼职顾问三类：挪威航海顾问（退役引航员或前Kystverket人员）、学术合作方（Chalmers/RISE或NTNU/UiS的Sha、Amdahl团队）、N400与AASHTO方面的规范顾问。其中最难补齐的是海事领域知识和数据准入方面的人员。这是本报告的组织建议，不来自资料。
 
 ### 风险与待决事项
 
@@ -453,7 +453,6 @@ P3阶段的付费试点有四个候选方向：
 | 竞争：Chalmers/RISE、MARIN、DNV/Kongsberg、中国集成商 | 被抢先 | 优先与Hörteborn生态合作；定位为白标引擎 |
 | AI过度宣称：轨迹预测存在数据泄漏，预警效果没有现场统计 | 信誉风险 | 按区域、船舶、时间三个维度做不相交验证；公开KPI |
 | 缺少直接的市场规模数据；Hordfast资金不确定 | 收入到账时点不确定 | 以美国研究市场和NCS提供现金流，挪威浮桥作为旗舰案例 |
-| 分散Pions钻井主业的资源 | 投入被摊薄 | 以NCS设施场景复用钻井客户关系 |
 
 还有四个需要尽早拍板的决策：
 - 主案例是否按"一主两辅"定为Nordfjord；
@@ -496,4 +495,65 @@ Anda–Lote被否决，反而让这个项目从"设计支持"变成了"决策审
 
 更深一层的发现是，在有邮轮通行的主航道上，设计船型主要由几何和运营决定，P_C调得再精细也改变不了多少。这里的几何是指开口宽度对比"未来"的侧向分布、空气吃水对比净空；运营是指风速禁航、限速和拖轮。而"未来"的侧向分布，AIS根本测不到，因为桥还不存在。因此，AI在这里最有价值的用途不是精修致因概率，而是带着不确定性快速探索"几何 × 运营"的组合空间，并模拟尚不存在的交通行为。
 
-现有厂商把设计阶段的频率研究和运营阶段的预警分给不同的公司和不同的模型。用同一个已标定的模型同时确定设计荷载和报警阈值，才是难以复制的护城河。对Pions来说，正确的做法是建一个横向的"结构–船舶碰撞风险引擎"：浮桥做旗舰展示，而离现金流最近的很可能是与钻井客户重叠的NCS海上设施。
+现有厂商把设计阶段的频率研究和运营阶段的预警分给不同的公司和不同的模型。用同一个已标定的模型同时确定设计荷载和报警阈值，才是难以复制的护城河。正确的做法是建一个横向的"结构–船舶碰撞风险引擎"：浮桥做旗舰展示，美国桥梁评估、NCS海上设施和海上风电NRA提供现金流。
+
+## 附录A：撞击力学与浮桥动力的开源工具
+
+结论：挪威研究机构没有开源的船撞专用力学模型。NTNU、SINTEF和DNV这条线上做碰撞计算的工具都是商业软件，包括USFOS、LS-DYNA、IMPETUS Afea和SIMA/Sesam。Pedersen & Zhang 1998、Liu & Amdahl 2010、Yu–Liu–Amdahl 2019等外部力学方法论文全部公开，但没有找到公开的代码实现。下表中的开源组件可以拼出降阶船–浮桥碰撞链。标注"A"的条目已下载PyPI包，核实了源码与许可证。
+
+| 环节 | 工具 | 来源 | 许可证 | 用途 | 可信度 |
+|---|---|---|---|---|---|
+| 浮桥结构时域 | BEEF（`beefpy` 0.6.3） | Knut Andreas Kvåle（NTNU，Bergsøysund研究） | MIT | 梁单元FE，含非线性Newmark/HHT积分，可作主梁时域模型（[PyPI](https://pypi.org/project/beefpy/)） | A |
+| 浮桥风浪响应 | WAWI（0.0.19） | 同上 | MIT | 多模态频域，支持浮筒附加质量、辐射阻尼和拖曳线性化，可用来建模态基（[PyPI](https://pypi.org/project/wawi/)） | A |
+| 模态识别 | KOMA（`koma-python`） | 同上 | MIT | 运营模态分析，用监测数据校准模型（[PyPI](https://pypi.org/project/koma-python/)） | A |
+| 失电漂移 | OpenDrift ShipDrift（1.14.12） | MET Norway | GPL-2 | 基于Sørgård & Vada（1998，DNV报告96-2011）的船舶漂移模型；DNV ERS漂移预测即建于OpenDrift之上（[GMD 2018](https://gmd.copernicus.org/articles/11/1405/2018/)） | A |
+| 船舶操纵 | MSS / PythonVehicleSimulator | Thor Fossen（NTNU） | MSS许可证未核实；Python版据第三方站点为MIT | 3–6自由度操纵，用于漏转和偏航轨迹仿真（[MSS](https://redirect.github.com/cybergalactic/MSS)） | C |
+| 浮筒水动力 | Capytaine（3.0.0） | 法国，基于Nemoh | Apache-2.0 | BEM附加质量和辐射阻尼，可替代WAMIT给WAWI供数 | A |
+| 锚泊 | MoorDyn（2.7.2） | 美国 | 未核实（BSD类） | 锚泊线动力 | B |
+| 高保真校核 | OpenRadioss | 原Altair，现归Siemens | AGPL | 显式FE，可替代LS-DYNA做少数关键工况；据称运行依赖一个仅以二进制提供的库（[Wikipedia](https://wikipedia.com/wiki/Radioss); [TNO 2024](https://publications.tno.nl/publication/34644782/fcb7OU1Z/TNO-2024-R11057A.pdf)） | B |
+
+建议的组合方式：
+- **自研碰撞核心**：刚体船 + F–δ接触弹簧 + BEEF/WAWI模态桥，做时域耦合，即第四节的ROM，约几百行代码。这正好是开源空白，可以作为自有IP。
+- **高保真只做标定**：OpenRadioss或LS-DYNA只算邮轮艏撞浮筒、上层建筑撞梁等关键工况，结果用来回拟接触曲线。
+- **借力学术团队**：与NTNU的碰撞力学团队（Amdahl/Yu）和浮桥动力团队（Kvåle/Øiseth）合作做校核。
+- **许可证**：MIT、Apache和BSD可以放心商用；GPL-2的OpenDrift以独立服务方式调用，不链接进分发的产品；AGPL的OpenRadioss只在内部计算中使用。
+
+## 附录B：开发计划——顺序、依存与可视化里程碑
+
+本附录把第七节的P1–P2展开为按周计划，按Demo核心团队3–4人估算：风险/船舶工程1人、数据/ML 1人、3D前端1人、结构动力0.5人。人更少时，周数乘以1.5–2。原则是每个里程碑都交付一个可视化成果，并在画面上同时暴露数据质量、模型拟合和验证结果。
+
+### B.1 模块与依存
+
+```
+D1 挪威AIS ─▶ R1 交通模型 ─▶ R2 动力撞击 ─┐
+D4 水深 ─┬▶ R1                            ├▶ R4 对标 ─▶ R6 全链集成 ─▶ R5 减险 ─▶ A1 UQ/A2 代理 ─▶ A3 优化 ─▶ A4 Agent
+         └▶ S1 3D底座                     │                 ▲
+D3 气象 ─▶ R3 漂移撞击 ───────────────────┘                 │
+D5 船参 ─▶ C1 能量 ─▶ C2 接触曲线 ─▶ C3 浮桥ROM ──────────────┘
+B0 桥型参数化（方案A/B/C）─▶ R2 / R3 / C3 / S1
+D2 美国AIS ─▶ Key Bridge回放（验证R2/R3/C1，不依赖挪威数据）
+```
+
+- **关键路径**：D1 → R1 → R2 → R6 → R5 → A3。最大的进度风险是D1，即Kystverket全量AIS申请。第0周提交申请，等待期间先用Key Bridge的CC0数据跑通引擎，用BarentsWatch的14天数据供3D回放。
+- **可并行**：C线只依赖D5和B0；S线可在第1周用公开地形启动；R3可先用均匀风玫瑰，再换NORA3。
+- **后置**：A2必须等全模型稳定；A4可以先用模拟接口搭骨架。
+
+### B.2 里程碑与可视化交付物
+
+| 周 | 里程碑 | 可视化交付物 | 据此评价什么 |
+|---|---|---|---|
+| W2 | M0 数据体检 | AIS覆盖热图、时间缺口、船型构成、Anda–Lote断面通过量、水深覆盖范围 | 数据准入、质量与清洗能力：轨迹不应穿陆地，断面计数要与港口统计对得上 |
+| W4 | M1 3D场景v0 | Cesium地形与水深，3个桥型可切换，AIS回放（按船型着色）；同期出Key Bridge 3D回放 | 场景保真度，数据与地理是否对齐 |
+| W6 | M2 交通模型 | 自动提取的航路和航段；桥轴线侧向分布直方图叠加混合模型（附QQ图）；分船型、分季节流量 | 统计建模与拟合优度，与Nordfjord Havn航次统计交叉验证 |
+| W8 | M3 频率引擎对标 | 对OMRAT/IWRAP的对标图；3D逐浮筒撞击频率热图；Cat I/Cat II/漂移三类分解；Key Bridge Method II量级 | 模型正确性与验证纪律（L0、L3） |
+| W10 | M4 撞击后果 | 撞击动画（邮轮撞浮筒、主梁摆动）；力、位移、锚索张力时程；与K12的40/60/80%能量分配对比 | 物理建模（L4） |
+| W12 | M5 设计荷载 | 超越曲线加置信带和10⁻⁴线；设计船型阶梯图；龙卷风敏感性图 | 端到端集成与UQ，工程核心成果 |
+| W14 | M6 减险沙盘 | 交互调节VTS/TSS/拖轮/限速/禁航/开口几何，曲线和3D热图实时更新；漂移轨迹云与拖轮响应 | 减险机理化建模，效果方向与量级是否符合文献 |
+| W17 | M7 优化与Agent | Pareto前沿；Nordfjord可行性边界图；自然语言驱动计算并生成N400附录草稿 | 优化器能否找回已知好解；Agent给出的数字是否都能追溯到求解器 |
+| W20+ | M8 运营态（可选） | 实时风险指数与分级告警；Key Bridge回放展示预警触发时刻 | 运营延伸潜力 |
+
+### B.3 过程评价机制
+
+- 每个里程碑除了图，还要交一张体检卡，内含三部分：数据卡（来源、许可、覆盖、缺陷）、模型卡（假设、参数来源、验证结果）、已知局限。
+- 每个里程碑发布一个可分享网页，版本累积，可以回看整个演进过程。
+- 固定三个真值锚点贯穿始终：OMRAT/IWRAP对标、Key Bridge事故、K12公开数据。任何模型改动后，三个锚点都要重新出图。
